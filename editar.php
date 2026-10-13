@@ -1,10 +1,14 @@
 <?php
 require_once 'conexion.php';
 
+// Cargar lista de categorías
+$resCats = $mysqli->query('SELECT id, nombre FROM categorias ORDER BY nombre');
+$categorias = $resCats ? $resCats->fetch_all(MYSQLI_ASSOC) : [];
+$idsValidos = array_map('intval', array_column($categorias, 'id'));
+
 $errores = [];
 $id = $_GET['id'] ?? $_POST['id'] ?? null;
 
-// Redirigir si no hay ID válido
 if (!$id || !filter_var($id, FILTER_VALIDATE_INT)) {
     header('Location: index.php');
     exit;
@@ -12,15 +16,13 @@ if (!$id || !filter_var($id, FILTER_VALIDATE_INT)) {
 
 $id = (int) $id;
 
-// PROCESAR FORMULARIO (POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $titulo      = trim($_POST['title']       ?? '');
-    $fecha       = trim($_POST['date']        ?? '');
-    $hora        = trim($_POST['time']        ?? '');
-    $categoria   = trim($_POST['category']    ?? '');
-    $descripcion = trim($_POST['description'] ?? '');
+    $titulo      = trim($_POST['title']        ?? '');
+    $fecha       = trim($_POST['date']         ?? '');
+    $hora        = trim($_POST['time']         ?? '');
+    $categoriaId = (int) ($_POST['categoria_id'] ?? 0);
+    $descripcion = trim($_POST['description']  ?? '');
 
-    // Validaciones
     if ($titulo === '') {
         $errores['title'] = 'El título del evento es obligatorio.';
     } elseif (mb_strlen($titulo) > 120) {
@@ -31,18 +33,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errores['date'] = 'La fecha es obligatoria.';
     }
 
-    if ($categoria === '') {
-        $errores['category'] = 'Selecciona una categoría válida.';
+    if (!in_array($categoriaId, $idsValidos, true)) {
+        $errores['categoria_id'] = 'Elige una categoría válida.';
     }
 
-    // Actualizar en MySQL si no hay errores
     if (empty($errores)) {
         $horaBD = ($hora === '') ? NULL : $hora;
         $descBD = ($descripcion === '') ? NULL : $descripcion;
 
-        $sql = "UPDATE eventos SET titulo = ?, fecha = ?, hora = ?, categoria = ?, descripcion = ? WHERE id = ?";
+        $sql = "UPDATE eventos SET titulo = ?, fecha = ?, hora = ?, categoria_id = ?, descripcion = ? WHERE id = ?";
         $stmt = $mysqli->prepare($sql);
-        $stmt->bind_param("sssssi", $titulo, $fecha, $horaBD, $categoria, $descBD, $id);
+        $stmt->bind_param("sssisi", $titulo, $fecha, $horaBD, $categoriaId, $descBD, $id);
 
         if ($stmt->execute()) {
             $stmt->close();
@@ -54,8 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 } else {
-    // CONSULTAR DATOS ACTUALES DEL EVENTO (GET)
-    $sql = "SELECT titulo, fecha, hora, categoria, descripcion FROM eventos WHERE id = ?";
+    $sql = "SELECT titulo, fecha, hora, categoria_id, descripcion FROM eventos WHERE id = ?";
     $stmt = $mysqli->prepare($sql);
     $stmt->bind_param("i", $id);
     $stmt->execute();
@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $titulo      = $evento['titulo'];
     $fecha       = $evento['fecha'];
     $hora        = $evento['hora'];
-    $categoria   = $evento['categoria'];
+    $categoriaId = (int) $evento['categoria_id'];
     $descripcion = $evento['descripcion'];
     $stmt->close();
 }
@@ -145,17 +145,17 @@ function e(?string $texto): string {
         </div>
 
         <div class="form-group" style="margin-bottom: 16px;">
-          <label for="event-category" class="form-label">Categoría *</label>
-          <select id="event-category" name="category" class="form-control">
+          <label for="categoria_id" class="form-label">Categoría *</label>
+          <select id="categoria_id" name="categoria_id" class="form-control">
             <option value="">-- Selecciona una categoría --</option>
-            <option value="Trabajo" <?= $categoria === 'Trabajo' || $categoria === 'trabajo' ? 'selected' : '' ?>>Trabajo</option>
-            <option value="Reunión" <?= $categoria === 'Reunión' || $categoria === 'reunion' ? 'selected' : '' ?>>Reunión con cliente</option>
-            <option value="Personal" <?= $categoria === 'Personal' || $categoria === 'personal' ? 'selected' : '' ?>>Personal / Salud</option>
-            <option value="Proyecto" <?= $categoria === 'Proyecto' || $categoria === 'proyecto' || $categoria === 'estudio' ? 'selected' : '' ?>>Revisión de Proyecto / Estudio</option>
-            <option value="Ocio" <?= $categoria === 'Ocio' || $categoria === 'ocio' ? 'selected' : '' ?>>Ocio / Deporte</option>
+            <?php foreach ($categorias as $cat): ?>
+              <option value="<?= (int) $cat['id'] ?>" <?= $categoriaId === (int) $cat['id'] ? 'selected' : '' ?>>
+                <?= e($cat['nombre']) ?>
+              </option>
+            <?php endforeach; ?>
           </select>
-          <?php if (isset($errores['category'])): ?>
-            <span class="error-message" style="color: #dc2626; font-size: 0.82rem; margin-top: 4px; display: block;"><?= e($errores['category']) ?></span>
+          <?php if (isset($errores['categoria_id'])): ?>
+            <span class="error-message" style="color: #dc2626; font-size: 0.82rem; margin-top: 4px; display: block;"><?= e($errores['categoria_id']) ?></span>
           <?php endif; ?>
         </div>
 
